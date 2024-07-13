@@ -11,10 +11,10 @@ import com.amazonaws.services.sns.model.PublishRequest;
 import com.missioncritical.model.Message;
 import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
-
-import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.FileUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
-
 
 import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
@@ -25,19 +25,19 @@ import javax.xml.bind.util.JAXBSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 
-@Slf4j
+
 public class MessageHandler implements RequestHandler<Request, Response>{
 
-
+    private static final Logger log = LoggerFactory.getLogger(MessageHandler.class);
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
     private final String XML_SCHEMA_KEY = "schema.xsd";
     private final String QUEUE_URL = "your-sqs-queue-url";
     private final String SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:960163975060:errorsTopic";
+
 
     @Override
     public Response handleRequest(Request request, Context context) {
@@ -77,10 +77,12 @@ public class MessageHandler implements RequestHandler<Request, Response>{
     }
 
 
-    private void validateXml(String xmlPayload) throws JAXBException, SAXException, FileNotFoundException {
+    private void validateXml(String xmlPayload) throws JAXBException, SAXException, IOException {
         // Fetch XML schema from S3
         AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
         String schema = s3Client.getObjectAsString(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY);
+        InputStream s3stream = s3Client.getObject(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY).getObjectContent();
+
 
         Message message = new Message();
 
@@ -93,7 +95,8 @@ public class MessageHandler implements RequestHandler<Request, Response>{
 
         //Setup schema validator
         SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        Schema schemaObj = sf.newSchema(new File(String.valueOf(new FileInputStream(schema))));
+        Schema schemaObj = sf.newSchema(new URL("https://"+XML_SCHEMA_BUCKET+".s3.amazonaws.com/"+XML_SCHEMA_KEY));
+
         jaxbUnmarshaller.setSchema(schemaObj);
 
 
