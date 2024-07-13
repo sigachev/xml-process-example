@@ -4,7 +4,7 @@
 codeuri = "F:\\Projects\\LambdaApp"
 runtime = "java17"
 architecture = "x86_64"
-handler = "com.missioncritical.MessageHandler::handleRequest"
+handler = "com.missioncritical.handler.MessageHandler::handleRequest"
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["Function"]

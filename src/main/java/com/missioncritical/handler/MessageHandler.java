@@ -1,4 +1,4 @@
-package com.missioncritical;
+package com.missioncritical.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -9,7 +9,10 @@ import com.amazonaws.services.sns.AmazonSNS;
 import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import com.amazonaws.services.sns.model.PublishRequest;
 import com.missioncritical.model.Message;
+import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
+
+import lombok.extern.slf4j.Slf4j;
 import org.xml.sax.SAXException;
 
 
@@ -27,8 +30,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-
-public class MessageHandler implements RequestHandler<String, Response>{
+@Slf4j
+public class MessageHandler implements RequestHandler<Request, Response>{
 
 
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
@@ -37,12 +40,12 @@ public class MessageHandler implements RequestHandler<String, Response>{
     private final String SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:960163975060:errorsTopic";
 
     @Override
-    public Response handleRequest(String xmlPayload, Context context) {
+    public Response handleRequest(Request request, Context context) {
         Response  response = new Response();
         try {
 
             // Validate XML payload
-            validateXml(xmlPayload);
+            validateXml(request.getMessage());
 
             // Converting input payload to java object
 /*            JAXBContext context = JAXBContext.newInstance(Message.class);
@@ -57,12 +60,15 @@ public class MessageHandler implements RequestHandler<String, Response>{
 
             response.setStatusCode(200);
             response.setBody("Message processed successfully.");
+            log.info("Message processed successfully.");
         } catch (
         ValidationException e) {
             response.setStatusCode(400);
             response.setBody("Invalid XML payload: " + e.getMessage());
+            log.error("Error validating XML payload: " + e.getMessage());
             sendNotification("Error validating XML payload: " + e.getMessage());
         } catch (Exception e) {
+            log.error("Internal Server Error: " + e.getMessage());
             response.setStatusCode(500);
             response.setBody("Internal Server Error: " + e.getMessage());
             sendNotification("Unexpected error: " + e.getMessage());
