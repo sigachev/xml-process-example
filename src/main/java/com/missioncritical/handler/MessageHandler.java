@@ -12,14 +12,10 @@ import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import com.amazonaws.services.sns.model.PublishRequest;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.missioncritical.model.Message;
 import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -35,11 +31,9 @@ import javax.xml.validation.Validator;
 import java.io.*;
 
 
+public class MessageHandler implements RequestHandler<Request, Response> {
 
-public class MessageHandler implements RequestHandler<Request, Response>{
-
-    // Initialize the Log4j logger.
-    static final Logger logger = LogManager.getLogger(MessageHandler.class);
+    static LambdaLogger logger;
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
     private final String XML_SCHEMA_KEY = "schema.xsd";
     private final String QUEUE_URL = "your-sqs-queue-url";
@@ -48,39 +42,47 @@ public class MessageHandler implements RequestHandler<Request, Response>{
 
     @Override
     public Response handleRequest(Request request, Context context) {
+        logger = context.getLogger();
 
-        logger.info("handleRequest started log info");
-        logger.debug("handleRequest started log debug", LogLevel.DEBUG);
-        logger.error("handleRequest started log error", LogLevel.ERROR);
+    /*    logger.log("handleRequest started log 1", LogLevel.INFO);
+        logger.log("handleRequest started log 2", LogLevel.DEBUG);
+        logger.log("handleRequest started log 3", LogLevel.ERROR);*/
 
-        Response  response = new Response();
+        Response response = new Response();
         try {
+            String xml = request.getMessage();
+
 
             // Validate XML payload
-            validateXml(request.getMessage());
+            validateXml(xml);
 
-            // Converting input payload to java object
-/*            JAXBContext context = JAXBContext.newInstance(Message.class);
+            
+            /*
+            //Converting input payload to java object
+            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
-            Message message = (Message) jaxbUnmarshaller.unmarshal(new StringReader(xmlPayload));
+            Message message = (Message) jaxbUnmarshaller.unmarshal(new StringReader(xml));
+            logger.log("Unmarshalled message: " + message, LogLevel.DEBUG);
+
 
             // Store in database
             storeMessage(message);
 
             // Send to SQS queue
-            sendToQueue(message);*/
+            sendToQueue(message);
+            */
+
 
             response.setStatusCode(200);
             response.setBody("Message processed successfully.");
-            logger.info("Message processed successfully.");
-        } catch (
-        ValidationException e) {
+            logger.log("Message processed successfully.", LogLevel.INFO);
+        } catch (ValidationException e) {
             response.setStatusCode(400);
             response.setBody("Invalid XML payload: " + e.getMessage());
-            logger.error("Error validating XML payload: " + e.getMessage());
+            logger.log("Error validating XML payload: " + e.getMessage(), LogLevel.ERROR);
             sendNotification("Error validating XML payload: " + e.getMessage());
         } catch (Exception e) {
-            logger.error("Internal Server Error: " + e.getMessage());
+            logger.log("Internal Server Error: " + e.getMessage(), LogLevel.ERROR);
             response.setStatusCode(500);
             response.setBody("Internal Server Error: " + e.getMessage());
             sendNotification("Unexpected error: " + e.getMessage());
@@ -92,20 +94,22 @@ public class MessageHandler implements RequestHandler<Request, Response>{
     private void validateXml(String xmlPayload) throws JAXBException, SAXException, IOException {
         // Fetch XML schema from S3
         AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
-        String schema = s3Client.getObjectAsString(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY);
+        //String schema = s3Client.getObjectAsString(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY);
         InputStream s3stream = s3Client.getObject(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY).getObjectContent();
 
-        XmlMapper mapper = new XmlMapper();
+       /* XmlMapper mapper = new XmlMapper();
         mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         mapper.setDefaultPrettyPrinter(new DefaultPrettyPrinter());
 
-        Message message = mapper.readValue(xmlPayload, Message.class);
-        logger.info("Deserialized message: {}", message);
-        logger.debug("Deserialized message: {}", message);
+        Message message = mapper.readValue(xmlPayload, Message.class);*/
+
+
+        /*logger.log("Deserialized message: " + message, LogLevel.DEBUG);*/
+
 
         //Get JAXBContext
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-        JAXBSource source = new JAXBSource(jaxbContext, message);
+       /* JAXBSource source = new JAXBSource(jaxbContext, message);*/
 
         //Create Unmarshaller
         Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
@@ -122,9 +126,10 @@ public class MessageHandler implements RequestHandler<Request, Response>{
         // Throws ValidationException on failure
         try {
             Validator validator = schemaObj.newValidator();
-            validator.validate(source);
+            StringReader reader = new StringReader(xmlPayload);
+            validator.validate(new StreamSource(reader));
         } catch (IOException | SAXException e) {
-            logger.error("Validation exception: {}", e.getMessage());
+            logger.log("Validation exception: " + e.getMessage(), LogLevel.ERROR);
         }
     }
 
@@ -154,10 +159,6 @@ public class MessageHandler implements RequestHandler<Request, Response>{
                 .withMessage(message);
         snsClient.publish(publishRequest);
     }
-
-
-
-
 
 
 }
