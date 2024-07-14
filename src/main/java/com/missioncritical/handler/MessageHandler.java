@@ -10,6 +10,9 @@ import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.sns.AmazonSNS;
 import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import com.amazonaws.services.sns.model.PublishRequest;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
@@ -36,42 +39,37 @@ public class MessageHandler implements RequestHandler<Request, Response> {
     static LambdaLogger logger;
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
     private final String XML_SCHEMA_KEY = "schema.xsd";
-    private final String QUEUE_URL = "your-sqs-queue-url";
+    private final String QUEUE_URL = "https://sqs.us-east-1.amazonaws.com/960163975060/processedMessages";
     private final String SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:960163975060:errorsTopic";
 
 
     @Override
     public Response handleRequest(Request request, Context context) {
         logger = context.getLogger();
-
-    /*    logger.log("handleRequest started log 1", LogLevel.INFO);
-        logger.log("handleRequest started log 2", LogLevel.DEBUG);
-        logger.log("handleRequest started log 3", LogLevel.ERROR);*/
-
+        String xml = request.getMessage();
         Response response = new Response();
-        try {
-            String xml = request.getMessage();
 
+        try {
 
             // Validate XML payload
             validateXml(xml);
 
-            
-            /*
             //Converting input payload to java object
-            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+            /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
             Message message = (Message) jaxbUnmarshaller.unmarshal(new StringReader(xml));
-            logger.log("Unmarshalled message: " + message, LogLevel.DEBUG);
+            logger.log("Unmarshalled message: " + message, LogLevel.DEBUG);*/
 
+            XmlMapper mapper = new XmlMapper();
+            mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+            mapper.setDefaultPrettyPrinter(new DefaultPrettyPrinter());
+            Message message = mapper.readValue(xml, Message.class);
 
             // Store in database
-            storeMessage(message);
+            storeMessage(xml);
 
             // Send to SQS queue
-            sendToQueue(message);
-            */
-
+            sendToQueue(xml);
 
             response.setStatusCode(200);
             response.setBody("Message processed successfully.");
@@ -139,7 +137,6 @@ public class MessageHandler implements RequestHandler<Request, Response> {
     }
 
 
-/*
     private void sendToQueue(String xmlPayload) {
         // Send message to SQS queue
         AmazonSQS sqsClient = AmazonSQSClientBuilder.defaultClient();
@@ -148,7 +145,7 @@ public class MessageHandler implements RequestHandler<Request, Response> {
                 .withMessageBody(xmlPayload);
         sqsClient.sendMessage(sendMessageRequest);
     }
-*/
+
 
     private void sendNotification(String message) {
         // Send notification using AWS SNS

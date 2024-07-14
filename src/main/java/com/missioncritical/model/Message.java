@@ -18,23 +18,23 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "ExercisePayload")
 @XmlAccessorType (XmlAccessType.NONE)
 //Jackson annotation
-//@JsonRootName(value = "ExercisePayload")
+@JsonRootName(value = "ExercisePayload")
 public class Message {
 
     @XmlElement(name = "MessageID", required = true)
-    //@JacksonXmlProperty(localName = "MessageID")
+    @JacksonXmlProperty(localName = "MessageID")
     String messageID;
 
     @XmlElement(name = "MessageSentDateTime", required = true)
-    //@JacksonXmlText( value = "MessageSentDateTime")
+    @JacksonXmlProperty( localName = "MessageSentDateTime")
     String messageSentDateTime;
 
     @XmlElement(name = "SubjectName", required = true)
-    //@JacksonXmlProperty(localName = "SubjectName")
+    @JacksonXmlProperty(localName = "SubjectName")
     String subjectName;
 
     @XmlElement(name = "SubjectEyeColor", required = true)
-    //@JacksonXmlProperty(localName = "SubjectEyeColor")
+    @JacksonXmlProperty(localName = "SubjectEyeColor")
     String subjectEyeColor;
 
 
