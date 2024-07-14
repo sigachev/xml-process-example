@@ -1,19 +1,25 @@
 package com.missioncritical.handler;
 
 import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 
+import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.sns.AmazonSNS;
 import com.amazonaws.services.sns.AmazonSNSClientBuilder;
 import com.amazonaws.services.sns.model.PublishRequest;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.missioncritical.model.Message;
 import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
-import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -22,17 +28,18 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.ValidationException;
 import javax.xml.bind.util.JAXBSource;
+import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import javax.xml.validation.Validator;
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URL;
+
 
 
 public class MessageHandler implements RequestHandler<Request, Response>{
 
-    private static final Logger log = LoggerFactory.getLogger(MessageHandler.class);
+    // Initialize the Log4j logger.
+    static final Logger logger = LogManager.getLogger(MessageHandler.class);
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
     private final String XML_SCHEMA_KEY = "schema.xsd";
     private final String QUEUE_URL = "your-sqs-queue-url";
@@ -41,6 +48,11 @@ public class MessageHandler implements RequestHandler<Request, Response>{
 
     @Override
     public Response handleRequest(Request request, Context context) {
+
+        logger.info("handleRequest started log info");
+        logger.debug("handleRequest started log debug", LogLevel.DEBUG);
+        logger.error("handleRequest started log error", LogLevel.ERROR);
+
         Response  response = new Response();
         try {
 
@@ -60,15 +72,15 @@ public class MessageHandler implements RequestHandler<Request, Response>{
 
             response.setStatusCode(200);
             response.setBody("Message processed successfully.");
-            log.info("Message processed successfully.");
+            logger.info("Message processed successfully.");
         } catch (
         ValidationException e) {
             response.setStatusCode(400);
             response.setBody("Invalid XML payload: " + e.getMessage());
-            log.error("Error validating XML payload: " + e.getMessage());
+            logger.error("Error validating XML payload: " + e.getMessage());
             sendNotification("Error validating XML payload: " + e.getMessage());
         } catch (Exception e) {
-            log.error("Internal Server Error: " + e.getMessage());
+            logger.error("Internal Server Error: " + e.getMessage());
             response.setStatusCode(500);
             response.setBody("Internal Server Error: " + e.getMessage());
             sendNotification("Unexpected error: " + e.getMessage());
@@ -83,8 +95,13 @@ public class MessageHandler implements RequestHandler<Request, Response>{
         String schema = s3Client.getObjectAsString(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY);
         InputStream s3stream = s3Client.getObject(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY).getObjectContent();
 
+        XmlMapper mapper = new XmlMapper();
+        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        mapper.setDefaultPrettyPrinter(new DefaultPrettyPrinter());
 
-        Message message = new Message();
+        Message message = mapper.readValue(xmlPayload, Message.class);
+        logger.info("Deserialized message: {}", message);
+        logger.debug("Deserialized message: {}", message);
 
         //Get JAXBContext
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
@@ -95,7 +112,8 @@ public class MessageHandler implements RequestHandler<Request, Response>{
 
         //Setup schema validator
         SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        Schema schemaObj = sf.newSchema(new URL("https://"+XML_SCHEMA_BUCKET+".s3.amazonaws.com/"+XML_SCHEMA_KEY));
+        //Schema schemaObj = sf.newSchema(new URL("https://"+XML_SCHEMA_BUCKET+".s3.amazonaws.com/"+XML_SCHEMA_KEY));
+        Schema schemaObj = sf.newSchema(new StreamSource(s3stream));
 
         jaxbUnmarshaller.setSchema(schemaObj);
 
@@ -106,7 +124,7 @@ public class MessageHandler implements RequestHandler<Request, Response>{
             Validator validator = schemaObj.newValidator();
             validator.validate(source);
         } catch (IOException | SAXException e) {
-            System.out.println("Exception: "+e.getMessage());
+            logger.error("Validation exception: {}", e.getMessage());
         }
     }
 
@@ -136,6 +154,9 @@ public class MessageHandler implements RequestHandler<Request, Response>{
                 .withMessage(message);
         snsClient.publish(publishRequest);
     }
+
+
+
 
 
 
