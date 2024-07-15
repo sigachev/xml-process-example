@@ -14,30 +14,30 @@ import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 //JAXB annotations
 @XmlRootElement(name = "ExercisePayload")
-@XmlAccessorType (XmlAccessType.NONE)
+@XmlAccessorType (XmlAccessType.FIELD)
 //Jackson annotation
 @JsonRootName(value = "ExercisePayload")
 public class Message {
 
-    @XmlElement(name = "MessageID", required = true)
-    @JacksonXmlProperty(localName = "MessageID")
+    //@XmlElement(name = "MessageID", required = true)
+    //@JacksonXmlProperty(localName = "MessageID")
     String messageID;
 
-    @XmlElement(name = "MessageSentDateTime", required = true)
-    @JacksonXmlProperty( localName = "MessageSentDateTime")
+    //@XmlElement(name = "MessageSentDateTime", required = true)
+    //@JacksonXmlProperty( localName = "MessageSentDateTime")
     String messageSentDateTime;
 
-    @XmlElement(name = "SubjectName", required = true)
-    @JacksonXmlProperty(localName = "SubjectName")
+    //@XmlElement(name = "SubjectName", required = true)
+    //@JacksonXmlProperty(localName = "SubjectName")
     String subjectName;
 
-    @XmlElement(name = "SubjectEyeColor", required = true)
-    @JacksonXmlProperty(localName = "SubjectEyeColor")
+    //@XmlElement(name = "SubjectEyeColor", required = true)
+    //@JacksonXmlProperty(localName = "SubjectEyeColor")
     String subjectEyeColor;
 
 
-    public Message() {
-    }
 }

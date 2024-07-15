@@ -13,12 +13,10 @@ import com.amazonaws.services.sns.model.PublishRequest;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.missioncritical.model.Message;
 import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
+import org.apache.commons.lang3.StringUtils;
 import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
@@ -26,7 +24,6 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.ValidationException;
-import javax.xml.bind.util.JAXBSource;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
@@ -46,24 +43,27 @@ public class MessageHandler implements RequestHandler<Request, Response> {
     @Override
     public Response handleRequest(Request request, Context context) {
         logger = context.getLogger();
-        String xml = request.getMessage();
+
         Response response = new Response();
 
         try {
+            String xml = request.getMessage();
+
+            if (StringUtils.isBlank(xml)) {
+                throw new IOException("Input is blank.");
+            }
+
 
             // Validate XML payload
             validateXml(xml);
 
+
             //Converting input payload to java object
-            /*JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
+/*            JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
             Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
+            logger.log("1");
             Message message = (Message) jaxbUnmarshaller.unmarshal(new StringReader(xml));
             logger.log("Unmarshalled message: " + message, LogLevel.DEBUG);*/
-
-            XmlMapper mapper = new XmlMapper();
-            mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-            mapper.setDefaultPrettyPrinter(new DefaultPrettyPrinter());
-            Message message = mapper.readValue(xml, Message.class);
 
             // Store in database
             storeMessage(xml);
@@ -74,9 +74,14 @@ public class MessageHandler implements RequestHandler<Request, Response> {
             response.setStatusCode(200);
             response.setBody("Message processed successfully.");
             logger.log("Message processed successfully.", LogLevel.INFO);
-        } catch (ValidationException e) {
+        } catch (IOException e) {
             response.setStatusCode(400);
-            response.setBody("Invalid XML payload: " + e.getMessage());
+            response.setBody("Input is blank.");
+            logger.log("Input is blank.", LogLevel.ERROR);
+            sendNotification("Input is blank.");
+        } catch (ValidationException e) {
+            response.setStatusCode(422);
+            response.setBody("Error validating XML payload: " + e.getMessage());
             logger.log("Error validating XML payload: " + e.getMessage(), LogLevel.ERROR);
             sendNotification("Error validating XML payload: " + e.getMessage());
         } catch (Exception e) {
@@ -89,36 +94,21 @@ public class MessageHandler implements RequestHandler<Request, Response> {
     }
 
 
-    private void validateXml(String xmlPayload) throws JAXBException, SAXException, IOException {
+    private void validateXml(String xmlPayload) throws JAXBException, SAXException {
         // Fetch XML schema from S3
         AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
-        //String schema = s3Client.getObjectAsString(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY);
         InputStream s3stream = s3Client.getObject(XML_SCHEMA_BUCKET, XML_SCHEMA_KEY).getObjectContent();
-
-       /* XmlMapper mapper = new XmlMapper();
-        mapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        mapper.setDefaultPrettyPrinter(new DefaultPrettyPrinter());
-
-        Message message = mapper.readValue(xmlPayload, Message.class);*/
-
-
-        /*logger.log("Deserialized message: " + message, LogLevel.DEBUG);*/
-
 
         //Get JAXBContext
         JAXBContext jaxbContext = JAXBContext.newInstance(Message.class);
-       /* JAXBSource source = new JAXBSource(jaxbContext, message);*/
 
         //Create Unmarshaller
         Unmarshaller jaxbUnmarshaller = jaxbContext.createUnmarshaller();
 
         //Setup schema validator
         SchemaFactory sf = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        //Schema schemaObj = sf.newSchema(new URL("https://"+XML_SCHEMA_BUCKET+".s3.amazonaws.com/"+XML_SCHEMA_KEY));
         Schema schemaObj = sf.newSchema(new StreamSource(s3stream));
-
         jaxbUnmarshaller.setSchema(schemaObj);
-
 
         // Validation logic
         // Throws ValidationException on failure
@@ -128,6 +118,7 @@ public class MessageHandler implements RequestHandler<Request, Response> {
             validator.validate(new StreamSource(reader));
         } catch (IOException | SAXException e) {
             logger.log("Validation exception: " + e.getMessage(), LogLevel.ERROR);
+            throw new ValidationException(e.getMessage());
         }
     }
 
