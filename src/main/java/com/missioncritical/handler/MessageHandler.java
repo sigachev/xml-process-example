@@ -4,6 +4,8 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
@@ -14,7 +16,6 @@ import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
 import com.missioncritical.model.Message;
-import com.missioncritical.model.Request;
 import com.missioncritical.model.Response;
 import org.apache.commons.lang3.StringUtils;
 import org.xml.sax.SAXException;
@@ -31,7 +32,7 @@ import javax.xml.validation.Validator;
 import java.io.*;
 
 
-public class MessageHandler implements RequestHandler<Request, Response> {
+public class MessageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     static LambdaLogger logger;
     private final String XML_SCHEMA_BUCKET = "sigachev-new";
@@ -41,13 +42,13 @@ public class MessageHandler implements RequestHandler<Request, Response> {
 
 
     @Override
-    public Response handleRequest(Request request, Context context) {
+    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent requestEvent, Context context) {
         logger = context.getLogger();
 
-        Response response = new Response();
+        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
 
         try {
-            String xml = request.getMessage();
+            String xml = requestEvent.getBody();
 
             if (StringUtils.isBlank(xml)) {
                 throw new IOException("Input is blank.");
